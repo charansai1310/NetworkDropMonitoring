@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Latency Monitor</title>
+    
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-T3DF4CJ2');</script>
+<!-- End Google Tag Manager -->
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            margin-top: 0;
+            color: #2c3e50;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .status-dot.success {
+            background-color: #2ecc71;
+        }
+        .status-dot.error {
+            background-color: #e74c3c;
+        }
+        .status-dot.warning {
+            background-color: #f39c12;
+        }
+        .timestamp {
+            color: #95a5a6;
+            font-size: 0.8em;
+            margin-top: 15px;
+            text-align: right;
+        }
+        .log-container {
+            height: 200px;
+            overflow-y: auto;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: monospace;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .log-entry.success {
+            background-color: rgba(46, 204, 113, 0.2);
+        }
+        .log-entry.error {
+            background-color: rgba(231, 76, 60, 0.2);
+        }
+        .log-entry.warning {
+            background-color: rgba(243, 156, 18, 0.2);
+        }
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+            position: relative;
+        }
+        .bar-chart {
+            display: flex;
+            height: 250px;
+            align-items: flex-end;
+            padding-bottom: 30px;
+            position: relative;
+            padding-left: 50px; /* Space for y-axis */
+        }
+        .time-slot {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        .bar {
+            width: 30px;
+            background-color: #3498db;
+            border-radius: 5px 5px 0 0;
+            transition: height 0.3s ease;
+            position: relative;
+        }
+        .bar.good {
+            background-color: #2ecc71;
+        }
+        .bar.medium {
+            background-color: #f39c12;
+        }
+        .bar.poor {
+            background-color: #e74c3c;
+        }
+        .time-label {
+            font-size: 12px;
+            margin-top: 8px;
+            color: #7f8c8d;
+        }
+        .chart-y-axis {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 250px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 50px;
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        .chart-y-label {
+            position: relative;
+            right: 5px;
+            text-align: right;
+        }
+        .chart-x-axis {
+            position: absolute;
+            left: 50px;
+            right: 0;
+            bottom: 30px;
+            height: 1px;
+            background-color: #bdc3c7;
+        }
+        .summary {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .summary-item {
+            text-align: center;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            flex-grow: 1;
+            margin: 0 5px;
+        }
+        .summary-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .summary-label {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        .progress-bar {
+            height: 6px;
+            background-color: #ecf0f1;
+            border-radius: 3px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #3498db;
+            width: 0;
+            transition: width 0.3s linear;
+        }
+        .api-status-message {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 15px;
+            text-align: center;
+        }
+        .api-status-message.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .api-status-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .api-status-message.warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .api-status-message.info {
+            background-color: #e2f0fb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-T3DF4CJ2"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+    
+    <div class="container">
+        <div class="card" id="latency-card">
+            <h2>
+                Network Latency Monitor
+                <span class="status-dot" id="network-status"></span>
+            </h2>
+            
+            <div class="summary">
+                <div class="summary-item">
+                    <div class="summary-value" id="curr-latency">-- ms</div>
+                    <div class="summary-label">Current Latency</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value" id="avg-latency">-- ms</div>
+                    <div class="summary-label">Average</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value" id="packet-loss">0%</div>
+                    <div class="summary-label">Packet Loss</div>
+                </div>
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-y-axis">
+                    <div class="chart-y-label">500ms</div>
+                    <div class="chart-y-label">400ms</div>
+                    <div class="chart-y-label">300ms</div>
+                    <div class="chart-y-label">200ms</div>
+                    <div class="chart-y-label">100ms</div>
+                    <div class="chart-y-label">0ms</div>
+                </div>
+                <div class="chart-x-axis"></div>
+                <div class="bar-chart" id="latency-chart">
+                    <!-- Bars will be generated here -->
+                </div>
+            </div>
+            
+            <div id="network-last-update" class="timestamp">Monitoring network latency...</div>
+        </div>
+
+        <div class="card">
+            <h2>System Log</h2>
+            <div class="log-container" id="log-container">
+                <div class="log-entry">System initializing...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize dataLayer
+        window.dataLayer = window.dataLayer || [];
+        
+        // Global variables
+        const MAX_SLOTS = 10; // Number of time slots in the chart
+        const UPDATE_INTERVAL = 30000; // Update every 30 seconds
+        const CYCLE_DURATION = 300000; // Complete cycle in 5 minutes
+        let latencyHistory = []; // Store latency measurements
+        let monitoringPaused = false;
+        let resumeTimeout = null;
+        let packetLossCount = 0;
+        let totalPackets = 0;
+        let monitoringInterval = null;
+        
+        // DOM Utility Functions
+        function getElement(id) {
+            return document.getElementById(id);
+        }
+        
+        function formatTimestamp(date) {
+            return date.toLocaleTimeString() + '.' + date.getMilliseconds().toString().padStart(3, '0');
+        }
+        
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+        
+        function addLogEntry(message, type = '') {
+            const logContainer = getElement('log-container');
+            if (!logContainer) return;
+            
+            const now = new Date();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.innerHTML = `<span class="timestamp">${formatTimestamp(now)}</span> ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function updateLastUpdated() {
+            const element = getElement('network-last-update');
+            if (!element) return;
+            
+            const now = new Date();
+            element.textContent = `Last updated: ${formatTimestamp(now)}`;
+        }
+        
+        function setStatusDot(status) {
+            const dot = getElement('network-status');
+            if (!dot) return;
+            
+            dot.className = 'status-dot ' + status;
+        }
+        
+        function showStatusMessage(type, title, subtitle = '') {
+            try {
+                // Create status message
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `api-status-message ${type}`;
+                messageDiv.innerHTML = `<strong>${title}</strong>${subtitle ? '<br><span style="font-size: 0.9em;">' + subtitle + '</span>' : ''}`;
+                
+                // Replace previous message if exists
+                const previousMessage = document.querySelector('.api-status-message');
+                const latencyCard = getElement('latency-card');
+                
+                if (previousMessage && latencyCard) {
+                    latencyCard.replaceChild(messageDiv, previousMessage);
+                } else if (latencyCard) {
+                    latencyCard.appendChild(messageDiv);
+                }
+                
+                return messageDiv;
+            } catch (e) {
+                console.error('Error showing status message:', e);
+                return null;
+            }
+        }
+        
+        function pushToDataLayer(eventName, eventData) {
+            try {
+                window.dataLayer.push({
+                    'event': eventName,
+                    'eventData': eventData,
+                    'timestamp': new Date().toISOString()
+                });
+                console.log('Data pushed to dataLayer:', eventName, eventData);
+                
+                // Log the dataLayer push
+                addLogEntry(`Event pushed to dataLayer: ${eventName}`, 'warning');
+            } catch (e) {
+                console.error('Error pushing to dataLayer:', e);
+            }
+        }
+        
+        // Latency classification
+        function getLatencyClass(latency) {
+            if (latency < 100) return 'good';
+            if (latency < 300) return 'medium';
+            return 'poor';
+        }
+        
+        // Initialize bar chart
+        function initializeBarChart() {
+            const chart = getElement('latency-chart');
+            if (!chart) return;
+            
+            chart.innerHTML = ''; // Clear existing content
+            
+            for (let i = 0; i < MAX_SLOTS; i++) {
+                const timeSlot = document.createElement('div');
+                timeSlot.className = 'time-slot';
+                
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                bar.id = `bar-${i}`;
+                bar.style.height = '0px'; // Start with empty bars
+                
+                const timeLabel = document.createElement('div');
+                timeLabel.className = 'time-label';
+                timeLabel.id = `time-${i}`;
+                timeLabel.textContent = '';
+                
+                timeSlot.appendChild(bar);
+                timeSlot.appendChild(timeLabel);
+                chart.appendChild(timeSlot);
+            }
+        }
+        
+        // Update bar chart with new latency values
+        function updateBarChart() {
+            const maxHeight = 250; // Maximum bar height in pixels
+            const maxLatencyScale = 500; // Scale to 500ms
+            
+            // Update all bars
+            latencyHistory.forEach((latency, index) => {
+                const bar = getElement(`bar-${index}`);
+                const timeLabel = getElement(`time-${index}`);
+                
+                if (!bar || !timeLabel) return; // Skip if elements don't exist
+                
+                if (latency === null) {
+                    // This was a packet loss
+                    bar.style.height = '0px';
+                    bar.className = 'bar poor';
+                } else {
+                    // Calculate height based on latency
+                    const height = Math.min(latency / maxLatencyScale * maxHeight, maxHeight);
+                    bar.style.height = `${height}px`;
+                    
+                    // Set color based on latency class
+                    bar.className = `bar ${getLatencyClass(latency)}`;
+                }
+                
+                // Set time label
+                const minutesAgo = (latencyHistory.length - 1 - index) * (UPDATE_INTERVAL / 60000);
+                timeLabel.textContent = minutesAgo === 0 ? 'now' : `-${minutesAgo.toFixed(0)}m`;
+            });
+        }
+        
+        // Simulate network latency measurement
+        function measureLatency() {
+            // Simulate packet loss (10% chance)
+            const hasPacketLoss = Math.random() < 0.1;
+            
+            if (hasPacketLoss) {
+                // Record packet loss
+                addLogEntry("Packet loss detected!", 'error');
+                updatePacketLossCounter();
+                return null; // Return null to indicate packet loss
+            }
+            
+            // Simulate realistic latency values with at least 30% high latency
+            let latency;
+            const randomFactor = Math.random();
+            
+            if (randomFactor < 0.4) {
+                // 40% chance of good latency (20-80ms)
+                latency = getRandomInt(20, 80);
+            } else if (randomFactor < 0.7) {
+                // 30% chance of medium latency (80-250ms)
+                latency = getRandomInt(80, 250);
+            } else {
+                // 30% chance of poor latency (300-800ms) - guaranteed high latency
+                latency = getRandomInt(300, 800);
+            }
+            
+            // Add some variation to make the graph more interesting
+            // Occasional extreme spikes
+            if (Math.random() < 0.05) {
+                latency *= 2;
+            }
+            
+            // Add to history
+            latencyHistory.push(latency);
+            
+            // Keep only the last MAX_SLOTS measurements
+            if (latencyHistory.length > MAX_SLOTS) {
+                latencyHistory.shift();
+            }
+            
+            // Update current latency display
+            const currLatencyElement = getElement('curr-latency');
+            if (currLatencyElement) {
+                currLatencyElement.textContent = `${latency} ms`;
+            }
+            
+            // Update log with latency info
+            const latencyClass = getLatencyClass(latency);
+            addLogEntry(`Network latency: ${latency} ms`, latencyClass);
+            
+            // Update status dot
+            setStatusDot(latencyClass);
+            
+            // Push to dataLayer and pause monitoring if latency is poor
+            if (latency > 300) {
+                pushToDataLayer('high_latency_detected', {
+                    latency: latency,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // Pause monitoring for 2 minutes
+                pauseMonitoringForHighLatency();
+            }
+            
+            return latency;
+        }
+        
+        // Update overall network stats
+        function updateStats() {
+            const validLatencies = latencyHistory.filter(l => l !== null);
+            
+            if (validLatencies.length === 0) return;
+            
+            // Calculate statistics
+            const avgLatency = Math.round(validLatencies.reduce((a, b) => a + b, 0) / validLatencies.length);
+            
+            // Update UI
+            const avgLatencyElement = getElement('avg-latency');
+            if (avgLatencyElement) {
+                avgLatencyElement.textContent = `${avgLatency} ms`;
+            }
+        }
+        
+        // Update packet loss counter
+        function updatePacketLossCounter() {
+            packetLossCount++;
+            totalPackets++;
+            const lossPercentage = Math.round((packetLossCount / totalPackets) * 100);
+            
+            const packetLossElement = getElement('packet-loss');
+            if (packetLossElement) {
+                packetLossElement.textContent = `${lossPercentage}%`;
+            }
+            
+            // Update status based on packet loss
+            if (lossPercentage > 10) {
+                setStatusDot('error');
+            }
+        }
+        
+        // Update the progress bar
+        function updateProgressBar(progress) {
+            const progressFillElement = getElement('progress-fill');
+            if (progressFillElement) {
+                progressFillElement.style.width = `${progress}%`;
+            }
+        }
+        
+        // Function to pause monitoring when high latency is detected
+        function pauseMonitoringForHighLatency() {
+            if (monitoringPaused) return; // Already paused
+            
+            monitoringPaused = true;
+            
+            // Show message
+            addLogEntry('⚠️ HIGH LATENCY DETECTED - Pausing monitoring for 2 minutes', 'error');
+            
+            const statusElement = getElement('network-last-update');
+            if (statusElement) {
+                statusElement.textContent = 'MONITORING PAUSED - High latency detected';
+            }
+            
+            // Create status message
+            showStatusMessage('error', '⚠️ HIGH LATENCY ALERT', 'Monitoring paused for 2 minutes');
+            
+            // Push event to dataLayer
+            pushToDataLayer('monitoring_paused', {
+                reason: 'high_latency',
+                duration_ms: 120000,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Schedule resumption after 2 minutes
+            resumeTimeout = setTimeout(() => {
+                monitoringPaused = false;
+                addLogEntry('Resuming monitoring after high latency pause', 'success');
+                
+                if (statusElement) {
+                    statusElement.textContent = 'Monitoring resumed';
+                }
+                
+                showStatusMessage('success', '✓ MONITORING RESUMED', 'Continuing normal operation');
+                
+                // Push event to dataLayer
+                pushToDataLayer('monitoring_resumed', {
+                    after: 'high_latency_pause',
+                    timestamp: new Date().toISOString()
+                });
+            }, 120000); // 2 minutes
+        }
+        
+        // Start the monitoring cycle
+        function startMonitoring() {
+            let elapsedTime = 0;
+            
+            addLogEntry('Starting regular network latency monitoring cycle...', 'success');
+            addLogEntry('Monitoring at 30-second intervals', 'success');
+            
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+            }
+            
+            monitoringInterval = setInterval(() => {
+                // Skip if monitoring is paused due to high latency
+                if (monitoringPaused) {
+                    return;
+                }
+                
+                try {
+                    // Measure latency
+                    const latency = measureLatency();
+                    
+                    // Increment total packets counter if not a packet loss
+                    if (latency !== null) {
+                        totalPackets++;
+                    }
+                    
+                    // Update chart
+                    updateBarChart();
+                    
+                    // Update stats
+                    updateStats();
+                    
+                    // Update timestamp
+                    updateLastUpdated();
+                    
+                    // Update progress
+                    elapsedTime += UPDATE_INTERVAL;
+                    const progress = (elapsedTime / CYCLE_DURATION) * 100;
+                    updateProgressBar(progress);
+                    
+                    // Check if cycle is complete
+                    if (elapsedTime >= CYCLE_DURATION) {
+                        // Reset cycle
+                        elapsedTime = 0;
+                        addLogEntry('Completed 5-minute monitoring cycle, starting new cycle...', 'success');
+                    }
+                } catch (error) {
+                    console.error('Error in monitoring interval:', error);
+                    addLogEntry(`Error: ${error.message}`, 'error');
+                }
+            }, UPDATE_INTERVAL);
+            
+            return monitoringInterval;
+        }
+        
+        // Run initial measurement
+        function runInitialMeasurement() {
+            try {
+                // Do first measurement immediately
+                const latency = measureLatency();
+                
+                // Increment total packets counter if not a packet loss
+                if (latency !== null) {
+                    totalPackets++;
+                }
+                
+                // Update chart
+                updateBarChart();
+                
+                // Update stats
+                updateStats();
+                
+                // Update timestamp
+                updateLastUpdated();
+                
+                // Now start the regular interval
+                startMonitoring();
+            } catch (error) {
+                console.error('Error in initial measurement:', error);
+                addLogEntry(`Error in initial measurement: ${error.message}`, 'error');
+                
+                // Try to start monitoring anyway
+                setTimeout(() => {
+                    startMonitoring();
+                }, 5000);
+            }
+        }
+        
+        // Initialize the application
+        function initApp() {
+            try {
+                // Setup UI
+                initializeBarChart();
+                setStatusDot('warning');
+                
+                // Show initializing message
+                showStatusMessage('info', '🔄 INITIALIZING', 'Taking first measurement...');
+                
+                // Log initialization
+                addLogEntry('Network Latency Monitor initialized', 'success');
+                addLogEntry('Taking first measurement immediately', 'success');
+                
+                // Run first measurement after a short delay
+                setTimeout(runInitialMeasurement, 1000);
+            } catch (error) {
+                console.error('Error initializing app:', error);
+                addLogEntry(`Initialization error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Initialize when DOM is fully loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            // DOM is already ready
+            initApp();
+        }
+    </script>
+</body>
+</html>
