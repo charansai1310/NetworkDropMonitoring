@@ -503,7 +503,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 pushToDataLayer('high_latency_error', {
                     latency: latency,
                     timestamp: new Date().toISOString()
-                }, 'network_high_latency');
+                }, 'Latency Threshold breached');
                 
                 // Pause monitoring for 2 minutes
                 pauseMonitoringForHighLatency();
