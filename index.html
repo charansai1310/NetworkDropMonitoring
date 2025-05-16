@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Network Latency Monitor</title>
     
-    <!-- Google Tag Manager -->
+<!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
 j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
@@ -212,7 +212,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     </style>
 </head>
 <body>
-    <!-- Google Tag Manager (noscript) -->
+<!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-T3DF4CJ2"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
@@ -324,6 +324,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             dot.className = 'status-dot ' + status;
         }
         
+        // Function to show status messages with proper removal of previous messages
         function showStatusMessage(type, title, subtitle = '') {
             try {
                 // Create status message
@@ -348,17 +349,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
         }
         
-        function pushToDataLayer(eventName, eventData) {
+        // Updated pushToDataLayer function to include issue parameter
+        function pushToDataLayer(eventName, eventData, issue = null) {
             try {
                 window.dataLayer.push({
                     'event': eventName,
                     'eventData': eventData,
+                    'issue': issue,
                     'timestamp': new Date().toISOString()
                 });
-                console.log('Data pushed to dataLayer:', eventName, eventData);
+                console.log('Data pushed to dataLayer:', eventName, eventData, issue);
                 
                 // Log the dataLayer push
-                addLogEntry(`Event pushed to dataLayer: ${eventName}`, 'warning');
+                addLogEntry(`Event pushed to dataLayer: ${eventName}${issue ? ' (Issue: ' + issue + ')' : ''}`, 'warning');
             } catch (e) {
                 console.error('Error pushing to dataLayer:', e);
             }
@@ -429,7 +432,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             });
         }
         
-        // Simulate network latency measurement
+        // Modify the latency measurement function to use the updated dataLayer push
         function measureLatency() {
             // Simulate packet loss (10% chance)
             const hasPacketLoss = Math.random() < 0.1;
@@ -438,21 +441,33 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 // Record packet loss
                 addLogEntry("Packet loss detected!", 'error');
                 updatePacketLossCounter();
+                
+                // Push packet loss event to dataLayer with issue
+                pushToDataLayer('packet_loss_error', {
+                    total_packets: totalPackets,
+                    lost_packets: packetLossCount,
+                    loss_percentage: Math.round((packetLossCount / totalPackets) * 100),
+                    timestamp: new Date().toISOString()
+                }, 'network_packet_loss');
+                
                 return null; // Return null to indicate packet loss
             }
+            
+            // Increment total packets for successful measurements
+            totalPackets++;
             
             // Simulate realistic latency values with at least 30% high latency
             let latency;
             const randomFactor = Math.random();
             
             if (randomFactor < 0.4) {
-                // 40% chance of good latency (20-80ms)
+                // 30% chance of good latency (20-80ms)
                 latency = getRandomInt(20, 80);
             } else if (randomFactor < 0.7) {
                 // 30% chance of medium latency (80-250ms)
                 latency = getRandomInt(80, 250);
             } else {
-                // 30% chance of poor latency (300-800ms) - guaranteed high latency
+                // 40% chance of poor latency (300-800ms) - guaranteed high latency
                 latency = getRandomInt(300, 800);
             }
             
@@ -485,13 +500,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             
             // Push to dataLayer and pause monitoring if latency is poor
             if (latency > 300) {
-                pushToDataLayer('high_latency_detected', {
+                pushToDataLayer('high_latency_error', {
                     latency: latency,
                     timestamp: new Date().toISOString()
-                });
+                }, 'network_high_latency');
                 
                 // Pause monitoring for 2 minutes
                 pauseMonitoringForHighLatency();
+            } else {
+                // For normal latency, push event with null issue
+                pushToDataLayer('latency_measurement', {
+                    latency: latency,
+                    latency_class: latencyClass,
+                    timestamp: new Date().toISOString()
+                }, null);
             }
             
             return latency;
@@ -513,7 +535,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
         }
         
-        // Update packet loss counter
+        // Update packet loss counter function to use new dataLayer push
         function updatePacketLossCounter() {
             packetLossCount++;
             totalPackets++;
@@ -524,9 +546,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 packetLossElement.textContent = `${lossPercentage}%`;
             }
             
+            // Log the exact packet loss percentage
+            addLogEntry(`Current packet loss: ${lossPercentage}% (${packetLossCount}/${totalPackets})`, 'warning');
+            
             // Update status based on packet loss
             if (lossPercentage > 10) {
                 setStatusDot('error');
+                
+                // Push high packet loss event to dataLayer
+                pushToDataLayer('high_packet_loss_error', {
+                    loss_percentage: lossPercentage,
+                    packets_lost: packetLossCount,
+                    total_packets: totalPackets,
+                    timestamp: new Date().toISOString()
+                }, 'excessive_packet_loss');
             }
         }
         
@@ -545,40 +578,35 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             monitoringPaused = true;
             
             // Show message
-            addLogEntry('⚠️ HIGH LATENCY DETECTED - Pausing monitoring for 2 minutes', 'error');
+            addLogEntry('⚠️ HIGH LATENCY DETECTED', 'error');
             
             const statusElement = getElement('network-last-update');
             if (statusElement) {
-                statusElement.textContent = 'MONITORING PAUSED - High latency detected';
+                statusElement.textContent = 'High latency detected';
             }
             
             // Create status message
-            showStatusMessage('error', '⚠️ HIGH LATENCY ALERT', 'Monitoring paused for 2 minutes');
+            showStatusMessage('error', '⚠️ HIGH LATENCY ALERT');
             
             // Push event to dataLayer
             pushToDataLayer('monitoring_paused', {
                 reason: 'high_latency',
-                duration_ms: 120000,
+                duration_ms: 60000,
                 timestamp: new Date().toISOString()
-            });
+            }, 'monitoring_suspended');
             
-            // Schedule resumption after 2 minutes
+            // Schedule resumption after 1 minute
             resumeTimeout = setTimeout(() => {
                 monitoringPaused = false;
-                addLogEntry('Resuming monitoring after high latency pause', 'success');
-                
-                if (statusElement) {
-                    statusElement.textContent = 'Monitoring resumed';
-                }
-                
-                showStatusMessage('success', '✓ MONITORING RESUMED', 'Continuing normal operation');
+
+                showStatusMessage('success', '✓ LATENCY CHECK RESUMED', 'Continuing normal operation');
                 
                 // Push event to dataLayer
                 pushToDataLayer('monitoring_resumed', {
                     after: 'high_latency_pause',
                     timestamp: new Date().toISOString()
-                });
-            }, 120000); // 2 minutes
+                }, null);
+            }, 60000); // 1 minute
         }
         
         // Start the monitoring cycle
@@ -601,11 +629,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 try {
                     // Measure latency
                     const latency = measureLatency();
-                    
-                    // Increment total packets counter if not a packet loss
-                    if (latency !== null) {
-                        totalPackets++;
-                    }
                     
                     // Update chart
                     updateBarChart();
@@ -639,13 +662,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         // Run initial measurement
         function runInitialMeasurement() {
             try {
+                // Remove the initializing message
+                const existingMessage = document.querySelector('.api-status-message');
+                if (existingMessage) {
+                    existingMessage.remove();
+                }
+                
                 // Do first measurement immediately
                 const latency = measureLatency();
-                
-                // Increment total packets counter if not a packet loss
-                if (latency !== null) {
-                    totalPackets++;
-                }
                 
                 // Update chart
                 updateBarChart();
@@ -656,14 +680,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 // Update timestamp
                 updateLastUpdated();
                 
+                // Show operational status message
+                showStatusMessage('success', '✓ MONITORING ACTIVE', 'Real-time network monitoring in progress');
+                
                 // Now start the regular interval
                 startMonitoring();
             } catch (error) {
                 console.error('Error in initial measurement:', error);
                 addLogEntry(`Error in initial measurement: ${error.message}`, 'error');
                 
+                // Show error message
+                showStatusMessage('error', '❌ INITIALIZATION ERROR', error.message);
+                
                 // Try to start monitoring anyway
                 setTimeout(() => {
+                    // Remove error message before starting
+                    const errorMessage = document.querySelector('.api-status-message');
+                    if (errorMessage) {
+                        errorMessage.remove();
+                    }
+                    
+                    showStatusMessage('info', '🔄 RETRYING', 'Attempting to start monitoring');
                     startMonitoring();
                 }, 5000);
             }
@@ -683,11 +720,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 addLogEntry('Network Latency Monitor initialized', 'success');
                 addLogEntry('Taking first measurement immediately', 'success');
                 
+                // Push initialization event to dataLayer
+                pushToDataLayer('monitoring_initialized', {
+                    timestamp: new Date().toISOString()
+                }, null);
+                
                 // Run first measurement after a short delay
                 setTimeout(runInitialMeasurement, 1000);
             } catch (error) {
                 console.error('Error initializing app:', error);
                 addLogEntry(`Initialization error: ${error.message}`, 'error');
+                
+                // Show error status
+                showStatusMessage('error', '❌ INITIALIZATION ERROR', error.message);
+                
+                // Push error event to dataLayer
+                pushToDataLayer('initialization_error', {
+                    error_message: error.message,
+                    timestamp: new Date().toISOString()
+                }, 'startup_failure');
             }
         }
         
