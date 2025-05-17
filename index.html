@@ -361,7 +361,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 console.log('Data pushed to dataLayer:', eventName, eventData, issue);
                 
                 // Log the dataLayer push
-                addLogEntry(`Event pushed to dataLayer: ${eventName}${issue ? ' (Issue: ' + issue + ')' : ''}`, 'warning');
+                //addLogEntry(`Event pushed to dataLayer: ${eventName}${issue ? ' (Issue: ' + issue + ')' : ''}`, 'warning');
             } catch (e) {
                 console.error('Error pushing to dataLayer:', e);
             }
@@ -432,7 +432,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             });
         }
         
-        // Modify the latency measurement function to use the updated dataLayer push
+        // Modified function to incorporate the random latency reasons
         function measureLatency() {
             // Simulate packet loss (10% chance)
             const hasPacketLoss = Math.random() < 0.1;
@@ -498,12 +498,34 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // Update status dot
             setStatusDot(latencyClass);
             
+            // Array of detailed latency issue reasons - same as in pauseMonitoringForHighLatency
+            const latencyReasons = [
+                "Packet routing time exceeds acceptable threshold.",
+                "Response times significantly above baseline.",
+                "Degraded performance detected in network path.",
+                "Response time exceeding normal parameters.",
+                "Network congestion affecting data transmission.",
+                "Bandwidth saturation causing packet delays.",
+                "Router buffer overflow likely occurring.",
+                "TCP retransmission rate increased.",
+                "Network jitter exceeding operational limits.",
+                "Last-mile connectivity issues detected."
+            ];
+            
             // Push to dataLayer and pause monitoring if latency is poor
             if (latency > 300) {
+                // Select a random reason from the array
+                const randomIndex = Math.floor(Math.random() * latencyReasons.length);
+                const selectedReason = latencyReasons[randomIndex];
+                
                 pushToDataLayer('high_latency_error', {
                     latency: latency,
-                    timestamp: new Date().toISOString()
-                }, 'Latency Threshold breached');
+                    timestamp: new Date().toISOString(),
+                    detailed_reason: selectedReason
+                }, selectedReason);
+                
+                // Call API to report failure when latency is high
+                callErrorAPI(latency, selectedReason);
                 
                 // Pause monitoring for 2 minutes
                 pauseMonitoringForHighLatency();
@@ -534,6 +556,126 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 avgLatencyElement.textContent = `${avgLatency} ms`;
             }
         }
+        
+        // Function to call error API when latency is high
+        function callErrorAPI(latency, reason) {
+    try {
+        // Create the payload with message set to "failure"
+        const payload = {
+            message: "failure"
+        };
+        
+        // Make the API call using fetch
+        fetch('https://682779d16b7628c529107e6c.mockapi.io/api/status/message/1', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`API returned status ${response.status}`);
+            }
+            return response.json();
+        })
+        .catch(error => {
+            // Log API call error
+            console.error('API call error:', error);
+        });
+        
+        // Start polling for recovery
+        startRecoveryPolling();
+    } catch (e) {
+        console.error('Error in callErrorAPI:', e);
+    }
+}
+let recoveryPollInterval = null;
+function startRecoveryPolling() {
+    // Clear any existing polling interval
+    if (recoveryPollInterval) {
+        clearInterval(recoveryPollInterval);
+    }
+    
+    // addLogEntry('Starting recovery polling...', 'warning');
+    // showStatusMessage('warning', '🔄 WAITING FOR RECOVERY', 'Polling API for system recovery status...');
+    
+    // Set up polling interval - check every 5 seconds
+    recoveryPollInterval = setInterval(() => {
+        checkRecoveryStatus();
+    }, 5000);
+}
+
+function checkRecoveryStatus() {
+    
+    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/status/message/1', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Check if the API returned a success message
+        if (data.message === "success") {
+            // System has recovered
+            systemRecovered();
+        } else {
+            // Still in error state
+        }
+    })
+    .catch(error => {
+        console.error('Recovery check error:', error);
+    });
+}
+
+function systemRecovered() {
+    // Stop polling
+    if (recoveryPollInterval) {
+        clearInterval(recoveryPollInterval);
+        recoveryPollInterval = null;
+    }
+    
+    addLogEntry('✅ SYSTEM RECOVERED - Resuming monitoring', 'success');
+    
+    // Clear the monitoring paused flag
+    monitoringPaused = false;
+    
+    // Clear any scheduled resume
+    if (resumeTimeout) {
+        clearTimeout(resumeTimeout);
+        resumeTimeout = null;
+    }
+    
+    // Update UI
+    showStatusMessage('success', '✅ SYSTEM RECOVERED', 'Resuming normal monitoring operations');
+    
+    // Push event to dataLayer
+    pushToDataLayer('system_recovered', {
+        timestamp: new Date().toISOString(),
+        recovery_source: 'api_response'
+    }, null);
+    
+    // Immediately take a new measurement instead of waiting
+    setTimeout(() => {
+        // Measure latency
+        const latency = measureLatency();
+        
+        // Update chart
+        updateBarChart();
+        
+        // Update stats
+        updateStats();
+        
+        // Update timestamp
+        updateLastUpdated();
+    }, 500); // Small delay to allow UI to update
+}
         
         // Update packet loss counter function to use new dataLayer push
         function updatePacketLossCounter() {
@@ -572,42 +714,80 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         }
         
         // Function to pause monitoring when high latency is detected
-        function pauseMonitoringForHighLatency() {
-            if (monitoringPaused) return; // Already paused
-            
-            monitoringPaused = true;
-            
-            // Show message
-            addLogEntry('⚠️ HIGH LATENCY DETECTED', 'error');
-            
-            const statusElement = getElement('network-last-update');
-            if (statusElement) {
-                statusElement.textContent = 'High latency detected';
-            }
-            
-            // Create status message
-            showStatusMessage('error', '⚠️ HIGH LATENCY ALERT');
-            
-            // Push event to dataLayer
-            pushToDataLayer('monitoring_paused', {
-                reason: 'high_latency',
-                duration_ms: 60000,
-                timestamp: new Date().toISOString()
-            }, 'monitoring_suspended');
-            
-            // Schedule resumption after 1 minute
-            resumeTimeout = setTimeout(() => {
-                monitoringPaused = false;
-
-                showStatusMessage('success', '✓ LATENCY CHECK RESUMED', 'Continuing normal operation');
-                
-                // Push event to dataLayer
-                pushToDataLayer('monitoring_resumed', {
-                    after: 'high_latency_pause',
-                    timestamp: new Date().toISOString()
-                }, null);
-            }, 60000); // 1 minute
-        }
+        // Function to pause monitoring when high latency is detected
+function pauseMonitoringForHighLatency() {
+    if (monitoringPaused) return; // Already paused
+    
+    monitoringPaused = true;
+    
+    // Get the current latency value for the message
+    const currLatencyElement = getElement('curr-latency');
+    const currentLatency = currLatencyElement ? currLatencyElement.textContent : '> 300 ms';
+    
+    // Count how many high latency events we've had in this session
+    window.highLatencyCount = (window.highLatencyCount || 0) + 1;
+    
+    // Show message
+    addLogEntry('⚠️ HIGH LATENCY DETECTED', 'error');
+    
+    const statusElement = getElement('network-last-update');
+    if (statusElement) {
+        statusElement.textContent = 'High latency detected - Waiting for system recovery';
+    }
+    
+    // Array of detailed latency issue reasons
+    const latencyReasons = [
+        "Packet routing time exceeds acceptable threshold.",
+        "Response times significantly above baseline.",
+        "Degraded performance detected in network path.",
+        "Response time exceeding normal parameters.",
+        "Network congestion affecting data transmission.",
+        "Bandwidth saturation causing packet delays.",
+        "Router buffer overflow likely occurring.",
+        "TCP retransmission rate increased.",
+        "Network jitter exceeding operational limits.",
+        "Last-mile connectivity issues detected."
+    ];
+    
+    // Select a random reason from the array
+    const randomIndex = Math.floor(Math.random() * latencyReasons.length);
+    const selectedReason = latencyReasons[randomIndex];
+    
+    // Create detailed status message with more information
+    let detailedDescription = selectedReason + ' ';
+    
+    // Add different types of context based on the high latency count
+    if (window.highLatencyCount === 1) {
+        detailedDescription += `Response time ${currentLatency} exceeds 300ms threshold.`;
+    } else if (window.highLatencyCount === 2) {
+        detailedDescription += `${window.highLatencyCount}nd occurrence detected. Consider checking your local network traffic.`;
+    } else if (window.highLatencyCount === 3) {
+        detailedDescription += `${window.highLatencyCount}rd occurrence in this session. Real-time applications may experience delays.`;
+    } else {
+        detailedDescription += `${window.highLatencyCount} occurrences in this session. Persistent latency issues detected.`;
+    }
+    
+    // Add monitoring information
+    detailedDescription += ' Monitoring paused until system recovers.';
+    
+    // Create status message
+    showStatusMessage('error', '⚠️ HIGH LATENCY ALERT', detailedDescription);
+    
+    // Call API to report failure
+    callErrorAPI(currentLatency.replace(' ms', ''), selectedReason);
+    
+    // Push to dataLayer with the specific issue
+    pushToDataLayer('monitoring_paused', {
+        reason: 'high_latency',
+        detailed_reason: selectedReason,
+        occurrences: window.highLatencyCount,
+        latency_value: currentLatency,
+        timestamp: new Date().toISOString()
+    }, selectedReason);
+    
+    // Note: We no longer set a resumeTimeout here
+    // The monitoring will remain paused until the API returns a success message
+}
         
         // Start the monitoring cycle
         function startMonitoring() {
@@ -717,8 +897,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 showStatusMessage('info', '🔄 INITIALIZING', 'Taking first measurement...');
                 
                 // Log initialization
-                addLogEntry('Network Latency Monitor initialized', 'success');
-                addLogEntry('Taking first measurement immediately', 'success');
+                //addLogEntry('Network Latency Monitor initialized', 'success');
+                //addLogEntry('Taking first measurement immediately', 'success');
                 
                 // Push initialization event to dataLayer
                 pushToDataLayer('monitoring_initialized', {
