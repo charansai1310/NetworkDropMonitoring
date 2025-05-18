@@ -501,15 +501,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // Array of detailed latency issue reasons - same as in pauseMonitoringForHighLatency
             const latencyReasons = [
                 "Packet routing time exceeds acceptable threshold.",
-                "Response times significantly above baseline.",
-                "Degraded performance detected in network path.",
-                "Response time exceeding normal parameters.",
-                "Network congestion affecting data transmission.",
                 "Bandwidth saturation causing packet delays.",
-                "Router buffer overflow likely occurring.",
+                "Network congestion affecting data transmission.",
                 "TCP retransmission rate increased.",
-                "Network jitter exceeding operational limits.",
-                "Last-mile connectivity issues detected."
+                "Network jitter exceeding operational limits."
             ];
             
             // Push to dataLayer and pause monitoring if latency is poor
@@ -559,39 +554,55 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         
         // Function to call error API when latency is high
         function callErrorAPI(latency, reason) {
-    try {
-        // Create the payload with message set to "failure"
-        const payload = {
-            message: "failure"
-        };
+            try {
+                // Create the payload with message set to "failure"
+                const payload = {
+                     message: "failure"
+            };
         
-        // Make the API call using fetch
-        fetch('https://682779d16b7628c529107e6c.mockapi.io/api/status/message/1', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`API returned status ${response.status}`);
+            // Make the API call using fetch
+                fetch('https://682779d16b7628c529107e6c.mockapi.io/api/cisco/bgp_optimize/1', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .catch(error => {
+                    // Log API call error
+                    console.error('API call error:', error);
+                });
+                fetch('https://682779d16b7628c529107e6c.mockapi.io/api/cisco/message/1', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .catch(error => {
+                    // Log API call error
+                    console.error('API call error:', error);
+                });
+                // Start polling for recovery
+                startRecoveryPolling();
+            } catch (e) {
+                console.error('Error in callErrorAPI:', e);
             }
-            return response.json();
-        })
-        .catch(error => {
-            // Log API call error
-            console.error('API call error:', error);
-        });
-        
-        // Start polling for recovery
-        startRecoveryPolling();
-    } catch (e) {
-        console.error('Error in callErrorAPI:', e);
-    }
-}
-let recoveryPollInterval = null;
-function startRecoveryPolling() {
+        }
+    let recoveryPollInterval = null;
+    function startRecoveryPolling() {
     // Clear any existing polling interval
     if (recoveryPollInterval) {
         clearInterval(recoveryPollInterval);
@@ -603,12 +614,12 @@ function startRecoveryPolling() {
     // Set up polling interval - check every 5 seconds
     recoveryPollInterval = setInterval(() => {
         checkRecoveryStatus();
-    }, 5000);
+    }, 5000);   
 }
 
 function checkRecoveryStatus() {
     
-    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/status/message/1', {
+    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/status/bgp_optimize/1', {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json'
@@ -632,6 +643,28 @@ function checkRecoveryStatus() {
     .catch(error => {
         console.error('Recovery check error:', error);
     });
+
+    const payload = {
+                     message: "failure"
+            };
+            
+    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/cisco/bgp_optimize/1', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .catch(error => {
+                    // Log API call error
+                    console.error('API call error:', error);
+                });
 }
 
 function systemRecovered() {
@@ -738,15 +771,10 @@ function pauseMonitoringForHighLatency() {
     // Array of detailed latency issue reasons
     const latencyReasons = [
         "Packet routing time exceeds acceptable threshold.",
-        "Response times significantly above baseline.",
-        "Degraded performance detected in network path.",
-        "Response time exceeding normal parameters.",
-        "Network congestion affecting data transmission.",
-        "Bandwidth saturation causing packet delays.",
-        "Router buffer overflow likely occurring.",
-        "TCP retransmission rate increased.",
-        "Network jitter exceeding operational limits.",
-        "Last-mile connectivity issues detected."
+                "Bandwidth saturation causing packet delays.",
+                "Network congestion affecting data transmission.",
+                "TCP retransmission rate increased.",
+                "Network jitter exceeding operational limits."
     ];
     
     // Select a random reason from the array
