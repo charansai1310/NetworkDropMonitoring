@@ -643,12 +643,19 @@ function checkRecoveryStatus() {
     .catch(error => {
         console.error('Recovery check error:', error);
     });
+}
 
+function systemRecovered() {
+    // Stop polling
+    if (recoveryPollInterval) {
+        clearInterval(recoveryPollInterval);
+        recoveryPollInterval = null;
+    }
     const payload = {
-                     message: "failure"
+                     message: "success"
             };
-            
-    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/cisco/bgp_optimize/1', {
+
+    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/cisco/message/1', {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -665,14 +672,6 @@ function checkRecoveryStatus() {
                     // Log API call error
                     console.error('API call error:', error);
                 });
-}
-
-function systemRecovered() {
-    // Stop polling
-    if (recoveryPollInterval) {
-        clearInterval(recoveryPollInterval);
-        recoveryPollInterval = null;
-    }
     
     addLogEntry('✅ SYSTEM RECOVERED - Resuming monitoring', 'success');
     
