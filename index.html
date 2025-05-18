@@ -603,23 +603,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         }
     let recoveryPollInterval = null;
     function startRecoveryPolling() {
-    // Clear any existing polling interval
     if (recoveryPollInterval) {
         clearInterval(recoveryPollInterval);
     }
-    
-    // addLogEntry('Starting recovery polling...', 'warning');
-    // showStatusMessage('warning', '🔄 WAITING FOR RECOVERY', 'Polling API for system recovery status...');
-    
-    // Set up polling interval - check every 5 seconds
     recoveryPollInterval = setInterval(() => {
         checkRecoveryStatus();
     }, 5000);   
 }
 
 function checkRecoveryStatus() {
-    
-    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/status/bgp_optimize/1', {
+    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/cisco/bgp_optimize', {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json'
@@ -633,9 +626,36 @@ function checkRecoveryStatus() {
     })
     .then(data => {
         // Check if the API returned a success message
-        if (data.message === "success") {
-            // System has recovered
-            systemRecovered();
+        const status = data[0];
+    if (status && status.message === "success") {
+            // System has recovered - updating message API to "failure" as requested
+            console.log("SUCCESS");
+            const failurePayload = {
+                message: "success"
+            };
+            
+            fetch('https://682779d16b7628c529107e6c.mockapi.io/api/cisco/message/1', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(failurePayload)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Message API returned status ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(() => {
+                // Only AFTER setting message API to failure, resume monitoring
+                systemRecovered();
+            })
+            .catch(error => {
+                console.error('Message API error:', error);
+                // If we can't update message API, still recover system
+                systemRecovered();
+            });
         } else {
             // Still in error state
         }
@@ -651,27 +671,6 @@ function systemRecovered() {
         clearInterval(recoveryPollInterval);
         recoveryPollInterval = null;
     }
-    const payload = {
-                     message: "success"
-            };
-
-    fetch('https://682779d16b7628c529107e6c.mockapi.io/api/cisco/message/1', {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`API returned status ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .catch(error => {
-                    // Log API call error
-                    console.error('API call error:', error);
-                });
     
     addLogEntry('✅ SYSTEM RECOVERED - Resuming monitoring', 'success');
     
